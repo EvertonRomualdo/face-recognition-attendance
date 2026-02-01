@@ -1,5 +1,5 @@
-from etl import face_capture
-import numpy as np
-import face_recognition
+from app import application
 
-face_capture.capture_video()
+id_camera = 0
+cap = application.get_video_capture(id_camera)
+application.execute_recognization(cap)
