@@ -101,3 +101,16 @@ def get_video_capture(cam_ip=0):
         return None
 
     return cap
+
+def get_available_cameras(max_cameras=10):
+    """
+    Detecta câmeras disponíveis no sistema testando índices de 0 a max_cameras-1.
+    Retorna uma lista de índices válidos.
+    """
+    available = []
+    for i in range(max_cameras):
+        cap = cv2.VideoCapture(i)
+        if cap.isOpened():
+            available.append(i)
+            cap.release()
+    return available
