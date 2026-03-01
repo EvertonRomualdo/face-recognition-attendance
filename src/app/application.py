@@ -1,7 +1,17 @@
 import cv2
 import numpy as np
 import face_recognition
+from datetime import datetime
+import sys
+from pathlib import Path
+
+# Adiciona o diretório src ao path se necessário
+src_path = Path(__file__).resolve().parent.parent
+if str(src_path) not in sys.path:
+    sys.path.insert(0, str(src_path))
+
 import repository
+from etl import attendance
 
 '''
 Lista de problemas/otimizações (ORIGINAIS):
@@ -18,6 +28,7 @@ def execute_recognization(cap: cv2.VideoCapture, process_interval=8, scale_facto
     known_face_encodings, known_face_names = repository.get_know_face_encodings()
 
     students_missing = known_face_names.copy()
+    recognized_students = {}  # Rastreia {nome: timestamp_str} dos alunos reconhecidos
 
     print(f"{len(known_face_names)} rostos carregados.")
 
@@ -66,7 +77,9 @@ def execute_recognization(cap: cv2.VideoCapture, process_interval=8, scale_facto
                 # Lógica de Registro de Presença
                 if name in students_missing:
                     students_missing.remove(name)
-                    print(f"✅ PRESENÇA REGISTRADA: {name}")
+                    timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    recognized_students[name] = timestamp_str
+                    print(f"✅ PRESENÇA REGISTRADA: {name} - {timestamp_str}")
                     print(f"   Faltam: {students_missing}")
 
         # desenha o retangulo no rosto (sempre, para visualização contínua)
@@ -91,6 +104,13 @@ def execute_recognization(cap: cv2.VideoCapture, process_interval=8, scale_facto
 
     cap.release()
     cv2.destroyAllWindows()
+    
+    # Salva as presenças em arquivo CSV
+    if recognized_students:
+        attendance.save_attendance(recognized_students)
+        print(f"\n📊 Total de alunos reconhecidos: {len(recognized_students)}")
+    else:
+        print("\n⚠️ Nenhum aluno foi reconhecido nesta sessão.")
 
 def get_video_capture(cam_ip=0):
     cap = cv2.VideoCapture(cam_ip)

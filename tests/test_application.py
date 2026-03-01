@@ -36,10 +36,18 @@ def test_execute_recognization_registers_presence(mocker):
     mocker.patch("cv2.imshow")
     mocker.patch("cv2.waitKey", return_value=ord("q"))
     mocker.patch("cv2.destroyAllWindows")
+    
+    # Mock da função de salvar presença
+    save_attendance_mock = mocker.patch("app.application.attendance.save_attendance")
 
     application.execute_recognization(fake_cap)
 
     fake_cap.release.assert_called_once()
+    # Verifica que a função de salvar presença foi chamada com dados
+    assert save_attendance_mock.called
+    called_args = save_attendance_mock.call_args[0][0]
+    assert "Anderson" in called_args
+
 
 def test_execute_recognization_processes_every_other_frame(mocker):
     mocker.patch(
