@@ -34,4 +34,4 @@ if cap is None:
     print("Erro: Não foi possível abrir a câmera selecionada.")
     exit(1)
 
-application.execute_recognization(cap)
+application.execute_recognization(cap, process_interval=8, scale_factor=0.5)

@@ -12,8 +12,7 @@ Lista de problemas/otimizações (ORIGINAIS):
 '''
 
 
-def execute_recognization(cap: cv2.VideoCapture):
-
+def execute_recognization(cap: cv2.VideoCapture, process_interval=8, scale_factor=0.5):
     # carrega os dados
     print("Carregando faces conhecidas...")
     known_face_encodings, known_face_names = repository.get_know_face_encodings()
@@ -23,7 +22,7 @@ def execute_recognization(cap: cv2.VideoCapture):
     print(f"{len(known_face_names)} rostos carregados.")
 
     # Variáveis de estado
-    process_this_frame = True
+    frame_count = 0
     face_locations = []
     face_encodings = []
     face_names = []
@@ -33,15 +32,17 @@ def execute_recognization(cap: cv2.VideoCapture):
         if not ret:
             break
 
-        # Otimizacao: o tamanho do frame foi reduzido para acelerar processamento
-        small_frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
+        frame_count += 1
+
+        # Otimizacao: o tamanho do frame foi ajustado para equilibrar qualidade e velocidade
+        small_frame = cv2.resize(frame, (0, 0), fx=scale_factor, fy=scale_factor)
 
         # Correcao de cores BGR para RGB e memória continua
         rgb_small_frame = small_frame[:, :, ::-1]
         rgb_small_frame = np.ascontiguousarray(rgb_small_frame)
 
-        # Otmização: processa um quadro sim outro nao
-        if process_this_frame:
+        # Otmização: processa a cada 'process_interval' frames para ~4 FPS
+        if frame_count % process_interval == 0:
             # Detecta posições
             face_locations = face_recognition.face_locations(rgb_small_frame)
             # Cria encodings
@@ -68,15 +69,13 @@ def execute_recognization(cap: cv2.VideoCapture):
                     print(f"✅ PRESENÇA REGISTRADA: {name}")
                     print(f"   Faltam: {students_missing}")
 
-        # inverse a flag
-        process_this_frame = not process_this_frame
-
-        # desenha o retangulo no rosto
+        # desenha o retangulo no rosto (sempre, para visualização contínua)
         for (top, right, bottom, left), name in zip(face_locations, face_names):
-            top *= 4
-            right *= 4
-            bottom *= 4
-            left *= 4
+            scale_back = 1 / scale_factor  # Para ajustar as coordenadas de volta ao frame original
+            top = int(top * scale_back)
+            right = int(right * scale_back)
+            bottom = int(bottom * scale_back)
+            left = int(left * scale_back)
 
             # Cor: Verde se conhecido, Vermelho se desconhecido
             color = (0, 255, 0) if name != "Desconhecido" else (0, 0, 255)
