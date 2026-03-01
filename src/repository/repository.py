@@ -4,6 +4,8 @@ import cv2
 import numpy as np
 from pathlib import Path
 
+from sklearn.cluster import KMeans
+
 BASE_DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 PICKLE_DIR = BASE_DATA_DIR / "pickle_cache"
 PICKLE_DIR.mkdir(parents=True, exist_ok=True)
@@ -25,6 +27,88 @@ def _load_pickle(filename):
     with open(filepath, "rb") as file:
         return pickle.load(file)
 
+
+def calculate_know_face_video_encodings(save_cache=True):
+    '''
+    Calcula os face encodings de uma pessoa baseado no video de apresentação.
+    Salva 3 encondings para cada pessoa.
+    '''
+    print("--- INICIANDO PROCESSAMENTO DE VIDEOS---")
+    known_face_encodings = []
+    known_face_names = []
+
+    raw_path = BASE_DATA_DIR / "raw_face_video"
+
+    if not raw_path.exists():
+        print(f"Pasta não encontrada: {raw_path}")
+        return [], []
+
+    for file_path in raw_path.iterdir():
+        if file_path.suffix.lower() not in ['.mp4', '.avi', '.mov']:
+            continue
+
+        name = file_path.stem
+        print(f"Extraindo características de: {name}...", end=" ")
+
+        cap = cv2.VideoCapture(str(file_path))
+
+        # Lista TEMPORARIA apenas para este aluno
+        person_encodings = []
+        frame_count = 0
+
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break  # Fim do vídeo
+
+            frame_count += 1
+
+            #calcula somente 1 a cada 10 frames
+            if frame_count % 10 != 0:
+                continue
+
+            # reduz para metade o tamanho para ganhar desempenho
+            small_frame = cv2.resize(frame, (0, 0), fx=0.5, fy=0.5)
+
+            rgb_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
+            rgb_frame = np.ascontiguousarray(rgb_frame)
+
+            faces = face_recognition.face_locations(rgb_frame, model="cnn")
+            print("calculei uma face")
+            encodings = face_recognition.face_encodings(rgb_frame, faces, model="larger")
+            print("calculei um encoding")
+
+            if len(encodings) > 0:
+                person_encodings.append(encodings[0])
+
+        cap.release()
+
+        num_frames = len(person_encodings)
+        if num_frames > 0:
+            # define K=3 (3 perfis diferentes da pessoa).
+            k_clusters = 3 if num_frames >= 3 else num_frames
+
+            # Instancia o algoritmo de agrupamento
+            kmeans = KMeans(n_clusters=k_clusters, n_init="auto", random_state=42)
+
+            # Treina com os dados do vídeos
+            kmeans.fit(np.array(person_encodings))
+
+            # kmeans.cluster_centers_ contém 3 vetores perfeitamente centralizados
+            for centroid in kmeans.cluster_centers_:
+                known_face_encodings.append(centroid)
+                known_face_names.append(name)  #Aqui salva o mesmo noem 3 vezes
+
+            print(f"OK! Extraídos {k_clusters} perfis perfeitos de {num_frames} frames válidos.")
+        else:
+            print("FALHA: Nenhum rosto nítido detectado no vídeo inteiro.")
+
+    if save_cache:
+        _save_pickle(known_face_encodings, KNOW_FACE_ENCODINGS_FILE_NAME)
+        _save_pickle(known_face_names, KNOW_FACE_NAMES_FILE_NAME)
+        print("Cache de vídeos salvo com sucesso!")
+
+    return known_face_encodings, known_face_names
 
 def _calculate_know_face_encodings(save_cache=True):
     known_face_encodings = []
@@ -74,7 +158,7 @@ def get_know_face_encodings(save_cache=True, recalculate=False):
 
     if recalculate:
         print("Forçando recálculo")
-        return _calculate_know_face_encodings(save_cache)
+        return calculate_know_face_video_encodings()
 
     know_face_encodings = _load_pickle(KNOW_FACE_ENCODINGS_FILE_NAME)
     know_face_names = _load_pickle(KNOW_FACE_NAMES_FILE_NAME)
