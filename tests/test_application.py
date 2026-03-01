@@ -36,7 +36,7 @@ def test_execute_recognization_registers_presence(mocker):
     mocker.patch("cv2.imshow")
     mocker.patch("cv2.waitKey", return_value=ord("q"))
     mocker.patch("cv2.destroyAllWindows")
-
+    
     application.execute_recognization(fake_cap)
 
     fake_cap.release.assert_called_once()
