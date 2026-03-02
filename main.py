@@ -46,4 +46,4 @@ while True:
         print("Video imported successfully!")
     else:
         print("Import canceled.")
-application.execute_recognization(cap, process_interval=8, scale_factor=0.5)
+application.execute_recognization(cap, process_interval=8, scale_factor=1.0)
