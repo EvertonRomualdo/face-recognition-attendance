@@ -225,7 +225,7 @@ def get_know_face_encodings(save_cache=True, recalculate=False):
 
 def rebuild_cache():
     """Força o rebuild total do cache."""
-    _calculate_know_face_encodings(save_cache=True)
+    calculate_know_face_video_encodings(save_cache=True)
 
 
 def add_single_face(image_path, name_override=None):

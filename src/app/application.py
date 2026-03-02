@@ -15,7 +15,7 @@ Lista de problemas/otimizações (ORIGINAIS):
 def execute_recognization(cap: cv2.VideoCapture, process_interval=8, scale_factor=0.5):
     # carrega os dados
     print("Carregando faces conhecidas...")
-    known_face_encodings, known_face_names = repository.get_know_face_encodings(recalculate=True)
+    known_face_encodings, known_face_names = repository.get_know_face_encodings()
 
     students_missing = known_face_names.copy()
 
