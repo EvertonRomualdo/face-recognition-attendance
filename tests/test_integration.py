@@ -1,6 +1,9 @@
 import numpy as np
 from app import application
 
+def _fake_frame():
+    return np.zeros((480, 640, 3), dtype = np.uint8)
+
 def test_integration_full_flow_one_frame(mocker):
     mock_repo = mocker.patch(
         "app.application.repository.get_know_face_encodings",
@@ -13,6 +16,7 @@ def test_integration_full_flow_one_frame(mocker):
         (False, None)
     ]
 
+    mocker.patch("cv2.resize", side_effect=lambda frame, *_args, **_kwargs: frame)
     mock_locations = mocker.patch("face_recognition.face_locations", return_value=[(10, 40, 40, 10)])
     mock_encodings = mocker.patch("face_recognition.face_encodings", return_value=[np.zeros(128)])
     mock_compare = mocker.patch("face_recognition.compare_faces", return_value=[True])
@@ -22,7 +26,7 @@ def test_integration_full_flow_one_frame(mocker):
     mocker.patch("cv2.destroyAllWindows")
 
     # Execução
-    application.execute_recognization(cap)
+    application.execute_recognization(cap, process_interval=1, scale_factor=0.5)
     cap.release.assert_called_once()
     
     mock_repo.assert_called_once()        # Garante que buscou os alunos no banco
@@ -30,3 +34,34 @@ def test_integration_full_flow_one_frame(mocker):
     mock_encodings.assert_called_once()   # Garante que extraiu as características do rosto
     mock_compare.assert_called_once()     # Garante que comparou o rosto encontrado com o banco
     mock_imshow.assert_called()           # Garante que tentou exibir a imagem
+
+def test_integration_full_flow_unknown_face(mocker):
+    mock_repo = mocker.patch(
+        "app.application.repository.get_know_face_encodings",
+        return_value=([np.zeros(128)], ["Anderson"])
+    )
+
+    cap = mocker.Mock()
+    cap.read.side_effect = [
+        (True, _fake_frame()),
+        (False, None)
+    ]
+
+    mock_locations = mocker.patch("face_recognition.face_locations", return_value=[(10, 40, 40, 10)])
+    mock_encodings = mocker.patch("face_recognition.face_encodings", return_value=[np.ones(128)]) 
+    mock_compare = mocker.patch("face_recognition.compare_faces", return_value=[False])
+    mocker.patch("face_recognition.face_distance", return_value=[0.8])
+
+    mock_imshow = mocker.patch("cv2.imshow")
+    mocker.patch("cv2.waitKey", return_value=ord('q'))
+    mocker.patch("cv2.destroyAllWindows")
+
+    # Execução
+    application.execute_recognization(cap, process_interval=1, scale_factor=0.5)
+
+    cap.release.assert_called_once()
+    mock_repo.assert_called_once()
+    mock_locations.assert_called_once()
+    mock_encodings.assert_called_once()
+    mock_compare.assert_called_once()
+    mock_imshow.assert_called()
