@@ -3,6 +3,9 @@ import face_recognition
 import cv2
 import numpy as np
 from pathlib import Path
+import shutil
+import tkinter as tk
+from tkinter import filedialog
 
 from sklearn.cluster import KMeans, DBSCAN
 from sklearn.metrics import pairwise_distances
@@ -27,6 +30,28 @@ def _load_pickle(filename):
         return None
     with open(filepath, "rb") as file:
         return pickle.load(file)
+
+def import_student_video(student_name: str) -> bool:
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes('-topmost', True)
+
+    source_path = filedialog.askopenfilename(
+        title="Select Video File",
+        filetypes=[("Video Files", "*.mp4 *.avi *.mov"), ("All Files", "*.*")]
+    )
+
+    if not source_path:
+        return False
+
+    dest_dir = BASE_DATA_DIR / "raw_face_video"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+    extension = Path(source_path).suffix
+    dest_path = dest_dir / f"{student_name}{extension}"
+
+    shutil.copy2(source_path, dest_path)
+    return True
 
 def extract_encodings_from_selfie_video(file_path, sample_every=8, scale=0.5, model="hog"):
     cap = cv2.VideoCapture(str(file_path))

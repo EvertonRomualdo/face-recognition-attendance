@@ -1,4 +1,5 @@
 from app import application
+from repository.repository import import_student_video
 
 available_cameras = application.get_available_cameras()
 
@@ -34,4 +35,15 @@ if cap is None:
     print("Erro: Não foi possível abrir a câmera selecionada.")
     exit(1)
 
+
+while True:
+    print("presione entre prar sair")
+    name = input("Enter the student's name: ")
+    if name == "":
+        break
+    success = import_student_video(name)
+    if success:
+        print("Video imported successfully!")
+    else:
+        print("Import canceled.")
 application.execute_recognization(cap, process_interval=8, scale_factor=0.5)
