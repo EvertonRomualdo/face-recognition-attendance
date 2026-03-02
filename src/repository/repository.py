@@ -1,11 +1,24 @@
+"""
+Módulo de gerenciamento de dados de reconhecimento facial.
+
+Este módulo é responsável pelo armazenamento, processamento e recuperação
+dos encodings faciais utilizados pelo sistema de reconhecimento.
+
+Principais responsabilidades:
+- Carregar e salvar encodings faciais em cache utilizando arquivos pickle.
+- Extrair encodings a partir de imagens ou vídeos de alunos.
+- Gerenciar o cache de encodings para evitar recomputações custosas.
+- Permitir a adição incremental de novos rostos ao sistema.
+"""
+
+from pathlib import Path
+import shutil
 import pickle
+import tkinter as tk
+from tkinter import filedialog
 import face_recognition
 import cv2
 import numpy as np
-from pathlib import Path
-import shutil
-import tkinter as tk
-from tkinter import filedialog
 
 from sklearn.cluster import KMeans, DBSCAN
 from sklearn.metrics import pairwise_distances
@@ -32,6 +45,10 @@ def _load_pickle(filename):
         return pickle.load(file)
 
 def import_student_video(student_name: str) -> bool:
+    """
+    Permite selecionar um vídeo de um aluno e copiá-lo para o diretório
+    de dados utilizado para extração de encodings faciais.
+    """
     root = tk.Tk()
     root.withdraw()
     root.attributes('-topmost', True)
@@ -54,6 +71,10 @@ def import_student_video(student_name: str) -> bool:
     return True
 
 def extract_encodings_from_selfie_video(file_path, sample_every=8, scale=0.5, model="hog"):
+    """
+    Extrai encodings faciais de um vídeo de selfie amostrando frames
+    periodicamente e filtrando rostos com baixa qualidade.
+    """
     cap = cv2.VideoCapture(str(file_path))
     person_encodings = []
     frame_count = 0
@@ -79,7 +100,9 @@ def extract_encodings_from_selfie_video(file_path, sample_every=8, scale=0.5, mo
         t, r, b, l = faces[idx]
 
         crop = small[t:b, l:r]
-        if crop.size == 0: continue
+        if crop.size == 0:
+            continue
+
         gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
         lap_var = cv2.Laplacian(gray, cv2.CV_64F).var()
 
@@ -236,7 +259,8 @@ def add_single_face(image_path, name_override=None):
     encodings, names = get_know_face_encodings(recalculate=False)
 
     img = cv2.imread(str(image_path))
-    if img is None: return False
+    if img is None:
+        return False
 
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     img = np.ascontiguousarray(img)
@@ -252,17 +276,5 @@ def add_single_face(image_path, name_override=None):
         _save_pickle(names, KNOW_FACE_NAMES_FILE_NAME)
         print("adicionado")
         return True
-    else:
-        print("Nenhum rosto encontrado")
-        return False
-
-
-
-
-
-
-
-
-
-
-
+    print("Nenhum rosto encontrado")
+    return False

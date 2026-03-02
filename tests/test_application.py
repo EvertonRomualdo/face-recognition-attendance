@@ -3,6 +3,14 @@ import pytest
 
 from app import application
 
+@pytest.fixture()
+def no_gui(mocker):
+    mocker.patch("cv2.namedWindow")
+    mocker.patch("cv2.setWindowProperty")
+    mocker.patch("cv2.imshow")
+    mocker.patch("cv2.waitKey", return_value=0)
+    mocker.patch("cv2.destroyAllWindows")
+
 def _fake_frame():
     return np.zeros((480, 640, 3), dtype=np.uint8)
 
@@ -14,8 +22,7 @@ def test_get_video_capture_returns_none_when_camera_fails(mocker):
     result = application.get_video_capture(0)
     assert result is None
 
-
-def test_execute_recognization_registers_presence_at_interval(mocker):
+def test_execute_recognization_registers_presence_at_interval(mocker, no_gui):
     mocker.patch(
         "app.application.repository.get_know_face_encodings",
         return_value=([np.zeros(128)], ["Anderson"])
@@ -35,15 +42,11 @@ def test_execute_recognization_registers_presence_at_interval(mocker):
     mocker.patch("face_recognition.compare_faces", return_value=[True])
     mocker.patch("face_recognition.face_distance", return_value=[0.0])
 
-    mocker.patch("cv2.imshow")
-    mocker.patch("cv2.waitKey", return_value=0)  # não aperta q
-    mocker.patch("cv2.destroyAllWindows")
-
     application.execute_recognization(cap, process_interval=2, scale_factor=0.5)
 
     cap.release.assert_called_once()
 
-def test_execute_recognization_calls_face_pipeline_only_every_n_frames(mocker):
+def test_execute_recognization_calls_face_pipeline_only_every_n_frames(mocker, no_gui):
     mocker.patch(
         "app.application.repository.get_know_face_encodings",
         return_value=([np.zeros(128)], ["Anderson"])
@@ -67,10 +70,6 @@ def test_execute_recognization_calls_face_pipeline_only_every_n_frames(mocker):
     mocker.patch("face_recognition.compare_faces", return_value=[True])
     mocker.patch("face_recognition.face_distance", return_value=[0.0])
 
-    mocker.patch("cv2.imshow")
-    mocker.patch("cv2.waitKey", return_value=0)
-    mocker.patch("cv2.destroyAllWindows")
-
     application.execute_recognization(cap, process_interval=3, scale_factor=0.5)
 
     assert loc_mock.call_count == 2
@@ -84,7 +83,7 @@ def test_execute_recognization_calls_face_pipeline_only_every_n_frames(mocker):
         ("Anderson", (0, 255, 0)),
     ],
 )
-def test_execute_recognization_draws_correct_color(mocker, detected_name, expected_color):
+def test_execute_recognization_draws_correct_color(mocker, detected_name, expected_color, no_gui):
     mocker.patch(
         "app.application.repository.get_know_face_encodings",
         return_value=([np.zeros(128)], ["Anderson"])
@@ -108,10 +107,6 @@ def test_execute_recognization_draws_correct_color(mocker, detected_name, expect
         mocker.patch("face_recognition.compare_faces", return_value=[False])
         mocker.patch("face_recognition.face_distance", return_value=[1.0])
 
-    mocker.patch("cv2.imshow")
-    mocker.patch("cv2.waitKey", return_value=0)
-    mocker.patch("cv2.destroyAllWindows")
-
     rect_mock = mocker.patch("cv2.rectangle")
     application.execute_recognization(cap, process_interval=2, scale_factor=0.5)
 
@@ -119,7 +114,7 @@ def test_execute_recognization_draws_correct_color(mocker, detected_name, expect
     _, args, _ = rect_mock.mock_calls[0]
     assert args[3] == expected_color
 
-def test_execute_recognization_uses_scale_factor_in_resize(mocker):
+def test_execute_recognization_uses_scale_factor_in_resize(mocker, no_gui):
     mocker.patch(
         "app.application.repository.get_know_face_encodings",
         return_value=([], [])
@@ -132,9 +127,6 @@ def test_execute_recognization_uses_scale_factor_in_resize(mocker):
     ]
 
     resize_mock = mocker.patch("cv2.resize", side_effect=lambda frame, *_args, **_kw: frame)
-    mocker.patch("cv2.imshow")
-    mocker.patch("cv2.waitKey", return_value=0)
-    mocker.patch("cv2.destroyAllWindows")
 
     application.execute_recognization(cap, process_interval=99, scale_factor=0.33)
 
@@ -144,14 +136,10 @@ def test_execute_recognization_uses_scale_factor_in_resize(mocker):
     assert kwargs["fy"] == 0.33
 
 
-def test_execute_recognization_scales_back_coordinates(mocker):
-    """
-    Agora as coordenadas são reescaladas com (1/scale_factor) e int().
-    Ex: top=10 com scale_factor=0.5 => scale_back=2 => top=20.
-    """
+def test_execute_recognization_scales_back_coordinates(mocker, no_gui):
     mocker.patch(
         "app.application.repository.get_know_face_encodings",
-        return_value=([np.zeros(128)], ["andy"])
+        return_value=([np.zeros(128)], ["Anderson"])
     )
 
     cap = mocker.Mock()
@@ -163,14 +151,10 @@ def test_execute_recognization_scales_back_coordinates(mocker):
 
     mocker.patch("cv2.resize", side_effect=lambda frame, *_args, **_kw: frame)
 
-    mocker.patch("face_recognition.face_locations", return_value=[(10, 20, 30, 40)])
+    mocker.patch("face_recognition.face_locations", return_value=[(10, 40, 30, 20)])
     mocker.patch("face_recognition.face_encodings", return_value=[np.zeros(128)])
     mocker.patch("face_recognition.compare_faces", return_value=[True])
     mocker.patch("face_recognition.face_distance", return_value=[0.0])
-
-    mocker.patch("cv2.imshow")
-    mocker.patch("cv2.waitKey", return_value=0)
-    mocker.patch("cv2.destroyAllWindows")
 
     rect_mock = mocker.patch("cv2.rectangle")
 
@@ -181,8 +165,8 @@ def test_execute_recognization_scales_back_coordinates(mocker):
     pt1 = args[1]  # (left, top)
     pt2 = args[2]  # (right, bottom)
 
-    assert pt1 == (80, 20)   # left=40*2, top=10*2
-    assert pt2 == (40, 60) or pt2 == (40, 60)  # right=20*2, bottom=30*2 (ajuste esperado)
+    assert pt1 == (40, 20)
+    assert pt2 == (80, 60)
 
 def test_get_available_cameras_returns_empty_when_none_available(mocker):
     cap_mock = mocker.Mock()

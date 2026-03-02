@@ -1,29 +1,42 @@
+"""
+Módulo de aplicação principal do sistema de reconhecimento facial para registro de presença.
+
+Este módulo contém a lógica responsável por:
+- Capturar frames da câmera utilizando OpenCV.
+- Executar o pipeline de reconhecimento facial utilizando a biblioteca face_recognition.
+- Comparar os rostos detectados com os encodings previamente armazenados no repositório.
+- Registrar a presença dos alunos reconhecidos durante a sessão.
+- Exibir o resultado visualmente em tempo real.
+"""
+
+import sys
+from pathlib import Path
+from datetime import datetime
 import cv2
 import numpy as np
 import face_recognition
-from datetime import datetime
-import sys
-from pathlib import Path
+
+import repository
+from etl import attendance
 
 # Adiciona o diretório src ao path se necessário
 src_path = Path(__file__).resolve().parent.parent
 if str(src_path) not in sys.path:
     sys.path.insert(0, str(src_path))
 
-import repository
-from etl import attendance
 
-'''
-Lista de problemas/otimizações (ORIGINAIS):
-    * É necessario um sistema de "cache" com encodings ja processados para ganhar em tempo
-    * A atual implementação esta bagunçada e não muito "arquitetada"
-    * O codigo pode ficar mais limpo e distribuido
-    * TENHO QUE OTIMIZAR! o codigo simplesmente não roda no meu PC :(
-'''
+#Lista de problemas/otimizações (ORIGINAIS):
+    #* É necessario um sistema de "cache" com encodings ja processados para ganhar em tempo
+    #* A atual implementação esta bagunçada e não muito "arquitetada"
+    #* O codigo pode ficar mais limpo e distribuido
+    #* TENHO QUE OTIMIZAR! o codigo simplesmente não roda no meu PC :(
 
 
 def execute_recognization(cap: cv2.VideoCapture, process_interval=8, scale_factor=0.5):
-    # carrega os dados
+    """
+    Executa o pipeline de reconhecimento facial a partir de um stream de vídeo,
+    detectando rostos e registrando a presença dos alunos reconhecidos.
+    """
     print("Carregando faces conhecidas...")
     known_face_encodings, known_face_names = repository.get_know_face_encodings()
 
@@ -109,7 +122,7 @@ def execute_recognization(cap: cv2.VideoCapture, process_interval=8, scale_facto
 
     cap.release()
     cv2.destroyAllWindows()
-    
+
     # Salva as presenças em arquivo CSV
     if recognized_students:
         attendance.save_attendance(recognized_students)
@@ -118,6 +131,7 @@ def execute_recognization(cap: cv2.VideoCapture, process_interval=8, scale_facto
         print("\n⚠️ Nenhum aluno foi reconhecido nesta sessão.")
 
 def get_video_capture(cam_ip=0):
+    """Abre a câmera especificada e retorna o objeto VideoCapture se disponível."""
     cap = cv2.VideoCapture(cam_ip)
 
     if not cap.isOpened():

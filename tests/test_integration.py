@@ -12,7 +12,7 @@ def test_integration_full_flow_one_frame(mocker):
 
     cap = mocker.Mock()
     cap.read.side_effect = [
-        (True, np.zeros((480, 640, 3), dtype=np.uint8)),
+        (True, _fake_frame()),
         (False, None)
     ]
 
@@ -21,9 +21,12 @@ def test_integration_full_flow_one_frame(mocker):
     mock_encodings = mocker.patch("face_recognition.face_encodings", return_value=[np.zeros(128)])
     mock_compare = mocker.patch("face_recognition.compare_faces", return_value=[True])
     mocker.patch("face_recognition.face_distance", return_value=[0.0])
-    mock_imshow = mocker.patch("cv2.imshow")
-    mocker.patch("cv2.waitKey", return_value=ord('q'))
-    mocker.patch("cv2.destroyAllWindows")
+    mock_imshow = mocker.patch("app.application.cv2.imshow")
+    mocker.patch("app.application.cv2.waitKey", return_value=ord("q"))
+    mocker.patch("app.application.cv2.destroyAllWindows")
+    mocker.patch("app.application.cv2.namedWindow")
+    mocker.patch("app.application.cv2.setWindowProperty")
+    mocker.patch("app.application.attendance.save_attendance")
 
     # Execução
     application.execute_recognization(cap, process_interval=1, scale_factor=0.5)
@@ -47,14 +50,17 @@ def test_integration_full_flow_unknown_face(mocker):
         (False, None)
     ]
 
+    mocker.patch("cv2.resize", side_effect=lambda frame, *_args, **_kwargs: frame)
     mock_locations = mocker.patch("face_recognition.face_locations", return_value=[(10, 40, 40, 10)])
     mock_encodings = mocker.patch("face_recognition.face_encodings", return_value=[np.ones(128)]) 
     mock_compare = mocker.patch("face_recognition.compare_faces", return_value=[False])
     mocker.patch("face_recognition.face_distance", return_value=[0.8])
-
-    mock_imshow = mocker.patch("cv2.imshow")
-    mocker.patch("cv2.waitKey", return_value=ord('q'))
-    mocker.patch("cv2.destroyAllWindows")
+    mock_imshow = mocker.patch("app.application.cv2.imshow")
+    mocker.patch("app.application.cv2.waitKey", return_value=ord("q"))
+    mocker.patch("app.application.cv2.destroyAllWindows")
+    mocker.patch("app.application.cv2.namedWindow")
+    mocker.patch("app.application.cv2.setWindowProperty")
+    save_mock = mocker.patch("app.application.attendance.save_attendance")
 
     # Execução
     application.execute_recognization(cap, process_interval=1, scale_factor=0.5)
@@ -65,3 +71,4 @@ def test_integration_full_flow_unknown_face(mocker):
     mock_encodings.assert_called_once()
     mock_compare.assert_called_once()
     mock_imshow.assert_called()
+    save_mock.assert_not_called()
