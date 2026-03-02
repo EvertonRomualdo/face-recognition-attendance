@@ -4,7 +4,8 @@ import cv2
 import numpy as np
 from pathlib import Path
 
-from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans, DBSCAN
+from sklearn.metrics import pairwise_distances
 
 BASE_DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 PICKLE_DIR = BASE_DATA_DIR / "pickle_cache"
@@ -27,6 +28,48 @@ def _load_pickle(filename):
     with open(filepath, "rb") as file:
         return pickle.load(file)
 
+def extract_encodings_from_selfie_video(file_path, sample_every=8, scale=0.5, model="hog"):
+    cap = cv2.VideoCapture(str(file_path))
+    person_encodings = []
+    frame_count = 0
+
+    while True:
+        ret, frame = cap.read()
+        if not ret: break
+
+        frame_count += 1
+        if frame_count % sample_every != 0:
+            continue
+
+        small = cv2.resize(frame, (0, 0), fx=scale, fy=scale)
+        rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
+        rgb = np.ascontiguousarray(rgb)
+
+        faces = face_recognition.face_locations(rgb, model=model)
+        if not faces:
+            continue
+
+        areas = [(b - t) * (r - l) for (t, r, b, l) in faces]
+        idx = int(np.argmax(areas))
+        t, r, b, l = faces[idx]
+
+        crop = small[t:b, l:r]
+        if crop.size == 0: continue
+        gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+        lap_var = cv2.Laplacian(gray, cv2.CV_64F).var()
+
+        MIN_AREA = 5000
+        MIN_BLUR = 40
+
+        if areas[idx] < MIN_AREA or lap_var < MIN_BLUR:
+            continue
+
+        encoding = face_recognition.face_encodings(rgb, [(t, r, b, l)], model="large")
+        if encoding:
+            person_encodings.append(encoding[0])
+
+    cap.release()
+    return person_encodings
 
 def calculate_know_face_video_encodings(save_cache=True):
     '''
@@ -50,56 +93,40 @@ def calculate_know_face_video_encodings(save_cache=True):
         name = file_path.stem
         print(f"Extraindo características de: {name}...", end=" ")
 
-        cap = cv2.VideoCapture(str(file_path))
-
-        # Lista TEMPORARIA apenas para este aluno
-        person_encodings = []
-        frame_count = 0
-
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break  # Fim do vídeo
-
-            frame_count += 1
-
-            #calcula somente 1 a cada 10 frames
-            if frame_count % 10 != 0:
-                continue
-
-            # reduz para metade o tamanho para ganhar desempenho
-            small_frame = cv2.resize(frame, (0, 0), fx=0.5, fy=0.5)
-
-            rgb_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
-            rgb_frame = np.ascontiguousarray(rgb_frame)
-
-            faces = face_recognition.face_locations(rgb_frame, model="cnn")
-            print("calculei uma face")
-            encodings = face_recognition.face_encodings(rgb_frame, faces, model="larger")
-            print("calculei um encoding")
-
-            if len(encodings) > 0:
-                person_encodings.append(encodings[0])
-
-        cap.release()
+        #faz o calculo do encoding
+        person_encodings = extract_encodings_from_selfie_video(file_path, scale=1)
 
         num_frames = len(person_encodings)
         if num_frames > 0:
-            # define K=3 (3 perfis diferentes da pessoa).
-            k_clusters = 3 if num_frames >= 3 else num_frames
-
-            # Instancia o algoritmo de agrupamento
-            kmeans = KMeans(n_clusters=k_clusters, n_init="auto", random_state=42)
-
-            # Treina com os dados do vídeos
-            kmeans.fit(np.array(person_encodings))
-
-            # kmeans.cluster_centers_ contém 3 vetores perfeitamente centralizados
-            for centroid in kmeans.cluster_centers_:
-                known_face_encodings.append(centroid)
-                known_face_names.append(name)  #Aqui salva o mesmo noem 3 vezes
-
-            print(f"OK! Extraídos {k_clusters} perfis perfeitos de {num_frames} frames válidos.")
+            encs = np.array(person_encodings)
+            # Tentar remover ruído com DBSCAN se falhar voltar para KMeans simples.
+            if len(encs) >= 3:
+                db = DBSCAN(eps=0.55, min_samples=2, metric='euclidean').fit(encs)
+                labels = db.labels_
+                unique_labels = [lab for lab in set(labels) if lab != -1]
+                if len(unique_labels) == 0:
+                    print("Tudo ruido: FALLBACK PRIMARIO")
+                    # tudo foi marcado como ruído; fallback para KMeans com k=1
+                    kmeans = KMeans(n_clusters=1, n_init="auto", random_state=42).fit(encs)
+                    for centroid in kmeans.cluster_centers_:
+                        known_face_encodings.append(centroid)
+                        known_face_names.append(name)
+                else:
+                    # para cada cluster, escolher o medoid
+                    for lab in unique_labels:
+                        cluster = encs[labels == lab]
+                        D = pairwise_distances(cluster)
+                        medoid = cluster[np.argmin(D.sum(axis=1))]
+                        known_face_encodings.append(medoid)
+                        known_face_names.append(name)
+            else:
+                print("Poucas Amostras: FALLBACK SECUNDARIO")
+                # se poucas amostras, use KMeans com K = num amostras (ou 1)
+                k_clusters = min(3, len(encs))
+                kmeans = KMeans(n_clusters=k_clusters, n_init="auto", random_state=42).fit(encs)
+                for centroid in kmeans.cluster_centers_:
+                    known_face_encodings.append(centroid)
+                    known_face_names.append(name)
         else:
             print("FALHA: Nenhum rosto nítido detectado no vídeo inteiro.")
 
