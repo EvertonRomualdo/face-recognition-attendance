@@ -38,6 +38,11 @@ def execute_recognization(cap: cv2.VideoCapture, process_interval=8, scale_facto
     face_encodings = []
     face_names = []
 
+    #made full widow
+    window_name = 'Reconhecimento Facial'
+    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+    cv2.setWindowProperty(window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -97,7 +102,7 @@ def execute_recognization(cap: cv2.VideoCapture, process_interval=8, scale_facto
             cv2.putText(frame, name, (left + 6, bottom - 6),
                         cv2.FONT_HERSHEY_DUPLEX, 0.7, (255, 255, 255), 1)
 
-        cv2.imshow('Reconhecimento Facial', frame)
+        cv2.imshow(window_name, frame)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
