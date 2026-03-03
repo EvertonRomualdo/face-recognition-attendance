@@ -13,3 +13,4 @@ setuptools<81
 pytest
 pytest-mock
 pytest-cov
+matplotlib
