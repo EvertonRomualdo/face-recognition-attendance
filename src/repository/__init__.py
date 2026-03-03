@@ -1,0 +1,11 @@
+"""Isso define o que é exportado quando alguém faz "from repository import *"
+   E serve como documentação do que é público.
+"""
+
+from .repository import get_know_face_encodings, rebuild_cache, add_single_face
+
+__all__ = [
+    "get_know_face_encodings",
+    "rebuild_cache",
+    "add_single_face"
+]
