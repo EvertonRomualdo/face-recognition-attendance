@@ -95,6 +95,7 @@ def extract_encodings_from_selfie_video(file_path, sample_every=8, scale=0.5, mo
         if not faces:
             continue
 
+        # pega o rosto de maior area
         areas = [(b - t) * (r - l) for (t, r, b, l) in faces]
         idx = int(np.argmax(areas))
         t, r, b, l = faces[idx]
@@ -102,7 +103,7 @@ def extract_encodings_from_selfie_video(file_path, sample_every=8, scale=0.5, mo
         crop = small[t:b, l:r]
         if crop.size == 0:
             continue
-
+        #filtra rostos borrados
         gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
         lap_var = cv2.Laplacian(gray, cv2.CV_64F).var()
 

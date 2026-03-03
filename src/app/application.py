@@ -75,11 +75,11 @@ def execute_recognization(cap: cv2.VideoCapture, process_interval=8, scale_facto
             # Detecta posições
             face_locations = face_recognition.face_locations(rgb_small_frame)
             # Cria encodings
-            face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations)
+            face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations, model="large")
             face_names = []
 
             for face_encoding in face_encodings:
-                matches = face_recognition.compare_faces(known_face_encodings, face_encoding)
+                matches = face_recognition.compare_faces(known_face_encodings, face_encoding, tolerance=0.50)
                 name = "Desconhecido"
 
                 # Calcula a distância euclidiana. Quanto menor mais parecido
