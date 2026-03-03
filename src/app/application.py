@@ -17,7 +17,7 @@ import numpy as np
 import face_recognition
 
 import repository
-from etl import attendance
+from util import attendance
 
 # Adiciona o diretório src ao path se necessário
 src_path = Path(__file__).resolve().parent.parent
@@ -50,6 +50,7 @@ def execute_recognization(cap: cv2.VideoCapture, process_interval=8, scale_facto
     face_locations = []
     face_encodings = []
     face_names = []
+    student_seen_count = {}
 
     #made full widow
     window_name = 'Reconhecimento Facial'
@@ -73,32 +74,38 @@ def execute_recognization(cap: cv2.VideoCapture, process_interval=8, scale_facto
         # Otmização: processa a cada 'process_interval' frames para ~4 FPS
         if frame_count % process_interval == 0:
             # Detecta posições
-            face_locations = face_recognition.face_locations(rgb_small_frame)
+            face_locations = face_recognition.face_locations(rgb_small_frame, number_of_times_to_upsample=2)
             # Cria encodings
             face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations, model="large")
             face_names = []
 
             for face_encoding in face_encodings:
-                matches = face_recognition.compare_faces(known_face_encodings, face_encoding, tolerance=0.50)
                 name = "Desconhecido"
 
-                # Calcula a distância euclidiana. Quanto menor mais parecido
                 face_distances = face_recognition.face_distance(known_face_encodings, face_encoding)
 
                 if len(face_distances) > 0:
-                    best_match_index = np.argmin(face_distances)
-                    if matches[best_match_index]:
+                    best_match_index = int(np.argmin(face_distances))
+                    best_dist = float(face_distances[best_match_index])
+
+
+                    TOL = 0.55  # mantenha o seu valor atual ou ajuste
+                    if best_dist <= TOL:
                         name = known_face_names[best_match_index]
 
                 face_names.append(name)
 
-                # Lógica de Registro de Presença
-                if name in students_missing:
-                    students_missing.remove(name)
-                    timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    recognized_students[name] = timestamp_str
-                    print(f"✅ PRESENÇA REGISTRADA: {name} - {timestamp_str}")
-                    print(f"   Faltam: {students_missing}")
+                # logica de presença
+                if name != "Desconhecido":
+                    student_seen_count[name] = student_seen_count.get(name, 0) + 1
+
+                    # Só registra se já foi visto pelo menos 2 vezes e ainda está na lista de faltas
+                    if student_seen_count[name] >= 2 and name in students_missing:
+                        students_missing.remove(name)
+                        timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        recognized_students[name] = timestamp_str
+                        print(f"✅ PRESENÇA REGISTRADA: {name} - {timestamp_str}")
+                        print(f"   Faltam: {students_missing}")
 
         # desenha o retangulo no rosto (sempre, para visualização contínua)
         for (top, right, bottom, left), name in zip(face_locations, face_names):
@@ -108,12 +115,11 @@ def execute_recognization(cap: cv2.VideoCapture, process_interval=8, scale_facto
             bottom = int(bottom * scale_back)
             left = int(left * scale_back)
 
-            # Cor: Verde se conhecido, Vermelho se desconhecido
             color = (0, 255, 0) if name != "Desconhecido" else (0, 0, 255)
-            cv2.rectangle(frame, (left, top), (right, bottom), color, 2)
-            cv2.rectangle(frame, (left, bottom - 35), (right, bottom), color, cv2.FILLED)
+            cv2.rectangle(frame, (left, top), (right, bottom), color, 1)
+            cv2.rectangle(frame, (left, bottom - 30), (right, bottom), color, cv2.FILLED)
             cv2.putText(frame, name, (left + 6, bottom - 6),
-                        cv2.FONT_HERSHEY_DUPLEX, 0.7, (255, 255, 255), 1)
+            cv2.FONT_HERSHEY_DUPLEX, 0.6, (255, 255, 255), 1)
 
         cv2.imshow(window_name, frame)
 

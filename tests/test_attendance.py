@@ -3,7 +3,7 @@ from datetime import datetime as real_datetime
 
 import pytest
 
-from etl import attendance
+from util import attendance
 
 class FixedDatetime:
     """

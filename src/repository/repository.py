@@ -122,8 +122,6 @@ def extract_encodings_from_selfie_video(file_path, sample_every=8, scale=0.5, mo
 
 def calculate_know_face_video_encodings(save_cache=True):
     '''
-    Calcula os face encodings de uma pessoa baseado no video de apresentação.
-    Salva 3 encondings para cada pessoa.
     '''
     print("--- INICIANDO PROCESSAMENTO DE VIDEOS---")
     known_face_encodings = []
@@ -148,34 +146,15 @@ def calculate_know_face_video_encodings(save_cache=True):
         num_frames = len(person_encodings)
         if num_frames > 0:
             encs = np.array(person_encodings)
-            # Tentar remover ruído com DBSCAN se falhar voltar para KMeans simples.
-            if len(encs) >= 3:
-                db = DBSCAN(eps=0.55, min_samples=2, metric='euclidean').fit(encs)
-                labels = db.labels_
-                unique_labels = [lab for lab in set(labels) if lab != -1]
-                if len(unique_labels) == 0:
-                    print("Tudo ruido: FALLBACK PRIMARIO")
-                    # tudo foi marcado como ruído; fallback para KMeans com k=1
-                    kmeans = KMeans(n_clusters=1, n_init="auto", random_state=42).fit(encs)
-                    for centroid in kmeans.cluster_centers_:
-                        known_face_encodings.append(centroid)
-                        known_face_names.append(name)
-                else:
-                    # para cada cluster, escolher o medoid
-                    for lab in unique_labels:
-                        cluster = encs[labels == lab]
-                        D = pairwise_distances(cluster)
-                        medoid = cluster[np.argmin(D.sum(axis=1))]
-                        known_face_encodings.append(medoid)
-                        known_face_names.append(name)
-            else:
-                print("Poucas Amostras: FALLBACK SECUNDARIO")
-                # se poucas amostras, use KMeans com K = num amostras (ou 1)
-                k_clusters = min(3, len(encs))
-                kmeans = KMeans(n_clusters=k_clusters, n_init="auto", random_state=42).fit(encs)
-                for centroid in kmeans.cluster_centers_:
-                    known_face_encodings.append(centroid)
-                    known_face_names.append(name)
+
+            mean_encoding = np.mean(encs, axis=0)
+
+            mean_encoding = mean_encoding / np.linalg.norm(mean_encoding)
+
+            known_face_encodings.append(mean_encoding)
+            known_face_names.append(name)
+
+            print("OK")
         else:
             print("FALHA: Nenhum rosto nítido detectado no vídeo inteiro.")
 
