@@ -173,7 +173,6 @@ def test_import_student_video_returns_false_when_user_cancels(mocker, tmp_path):
     ask.assert_called_once()
     copy2.assert_not_called()
 
-
 def test_import_student_video_copies_file_when_selected(mocker, tmp_path):
     mocker.patch("repository.repository.BASE_DATA_DIR", tmp_path)
 
@@ -196,13 +195,8 @@ def test_import_student_video_copies_file_when_selected(mocker, tmp_path):
     dest_path = dest_dir / "Anderson.mp4"
     copy2.assert_called_once_with(source, dest_path)
 
-
-# ---------------------------------------------------------
-# NOVOS TESTES: extract_encodings_from_selfie_video
-# ---------------------------------------------------------
 @pytest.mark.allow_video
 def test_extract_encodings_returns_one_encoding_when_face_is_good(mocker):
-    # Mock do VideoCapture (3 frames: só o 2º processa com sample_every=2)
     cap = mocker.Mock()
     cap.read.side_effect = [
         (True, np.zeros((200, 200, 3), dtype=np.uint8)),
@@ -212,22 +206,17 @@ def test_extract_encodings_returns_one_encoding_when_face_is_good(mocker):
     cap.release = mocker.Mock()
     mocker.patch("cv2.VideoCapture", return_value=cap)
 
-    # Simplifica operações de imagem
     mocker.patch("cv2.resize", side_effect=lambda frame, size, fx, fy: frame)
 
     def fake_cvt(img, code):
-        # RGB -> mantém shape 3 canais; GRAY -> 2D
         if len(img.shape) == 3:
             return img
         return img
 
     mocker.patch("cv2.cvtColor", side_effect=fake_cvt)
 
-    # Face grande e nítida
     mocker.patch("face_recognition.face_locations", return_value=[(0, 100, 100, 0)])
     enc_mock = mocker.patch("face_recognition.face_encodings", return_value=[np.ones(128)])
-
-    # blur ok: var > 40
     mocker.patch("cv2.Laplacian", return_value=np.array([0.0, 100.0]))
 
     out = repository.extract_encodings_from_selfie_video("x.mp4", sample_every=2, scale=1)
@@ -251,10 +240,9 @@ def test_extract_encodings_filters_blurry_face_and_returns_empty(mocker):
     mocker.patch("cv2.resize", side_effect=lambda frame, size, fx, fy: frame)
     mocker.patch("cv2.cvtColor", side_effect=lambda img, code: img)
 
-    # Face grande, mas blur ruim (var ~ 0)
     mocker.patch("face_recognition.face_locations", return_value=[(0, 100, 100, 0)])
     enc_mock = mocker.patch("face_recognition.face_encodings", return_value=[np.ones(128)])
-    mocker.patch("cv2.Laplacian", return_value=np.array([0.0]))  # var = 0 -> blur ruim
+    mocker.patch("cv2.Laplacian", return_value=np.array([0.0]))
 
     out = repository.extract_encodings_from_selfie_video("x.mp4", sample_every=1, scale=1)
 
@@ -263,9 +251,6 @@ def test_extract_encodings_filters_blurry_face_and_returns_empty(mocker):
     cap.release.assert_called_once()
 
 
-# ---------------------------------------------------------
-# NOVOS TESTES: calculate_know_face_video_encodings (branches DBSCAN/KMeans)
-# ---------------------------------------------------------
 @pytest.mark.allow_video
 def test_calculate_video_encodings_returns_empty_when_video_dir_missing(mocker, tmp_path):
     mocker.patch("repository.repository.BASE_DATA_DIR", tmp_path)
@@ -289,112 +274,24 @@ def test_calculate_video_encodings_ignores_non_video_files(mocker, tmp_path):
     assert names == []
     ext.assert_not_called()
 
-
 @pytest.mark.allow_video
-def test_calculate_video_encodings_fallback_secondary_kmeans_when_few_samples(mocker, tmp_path):
+def test_calculate_video_encodings_mean_and_l2_normalize(mocker, tmp_path):
     mocker.patch("repository.repository.BASE_DATA_DIR", tmp_path)
     raw = tmp_path / "raw_face_video"
     raw.mkdir()
     (raw / "Anderson.mp4").write_bytes(b"x")
 
-    # 2 amostras -> fallback secundário (KMeans com k=2)
     mocker.patch(
         "repository.repository.extract_encodings_from_selfie_video",
         return_value=[np.zeros(128), np.ones(128)],
     )
 
-    class FakeKMeans:
-        def __init__(self, n_clusters, n_init, random_state):
-            self.n_clusters = n_clusters
-            self.cluster_centers_ = [np.full(128, 10.0), np.full(128, 20.0)]
+    encs, names = repository.calculate_know_face_video_encodings(save_cache=False)
 
-        def fit(self, encs):
-            return self
-
-    km = mocker.patch("repository.repository.KMeans", side_effect=FakeKMeans)
-
-    enc, names = repository.calculate_know_face_video_encodings(save_cache=False)
-
-    assert len(enc) == 2
-    assert names == ["Anderson", "Anderson"]
-    assert km.called
-
-
-@pytest.mark.allow_video
-def test_calculate_video_encodings_fallback_primary_when_dbscan_all_noise(mocker, tmp_path):
-    mocker.patch("repository.repository.BASE_DATA_DIR", tmp_path)
-    raw = tmp_path / "raw_face_video"
-    raw.mkdir()
-    (raw / "Anderson.mp4").write_bytes(b"x")
-
-    # 3+ amostras -> tenta DBSCAN
-    mocker.patch(
-        "repository.repository.extract_encodings_from_selfie_video",
-        return_value=[np.zeros(128), np.ones(128), np.full(128, 2.0)],
-    )
-
-    # DBSCAN: tudo -1 (ruído)
-    class FakeDBSCAN:
-        def __init__(self, eps, min_samples, metric):
-            self.labels_ = None
-
-        def fit(self, encs):
-            self.labels_ = np.array([-1, -1, -1])
-            return self
-
-    mocker.patch("repository.repository.DBSCAN", side_effect=FakeDBSCAN)
-
-    # fallback primário: KMeans com k=1
-    class FakeKMeans:
-        def __init__(self, n_clusters, n_init, random_state):
-            self.cluster_centers_ = [np.full(128, 99.0)]
-
-        def fit(self, encs):
-            return self
-
-    mocker.patch("repository.repository.KMeans", side_effect=FakeKMeans)
-
-    enc, names = repository.calculate_know_face_video_encodings(save_cache=False)
-
-    assert len(enc) == 1
+    assert len(encs) == 1
     assert names == ["Anderson"]
 
-
-@pytest.mark.allow_video
-def test_calculate_video_encodings_dbscan_clusters_choose_medoid(mocker, tmp_path):
-    mocker.patch("repository.repository.BASE_DATA_DIR", tmp_path)
-    raw = tmp_path / "raw_face_video"
-    raw.mkdir()
-    (raw / "Anderson.mp4").write_bytes(b"x")
-
-    # 4 encodings -> DBSCAN labels [0,0,1,1]
-    e0 = np.zeros(128)
-    e1 = np.ones(128)
-    e2 = np.full(128, 2.0)
-    e3 = np.full(128, 3.0)
-
-    mocker.patch(
-        "repository.repository.extract_encodings_from_selfie_video",
-        return_value=[e0, e1, e2, e3],
-    )
-
-    class FakeDBSCAN:
-        def __init__(self, eps, min_samples, metric):
-            self.labels_ = None
-
-        def fit(self, encs):
-            self.labels_ = np.array([0, 0, 1, 1])
-            return self
-
-    mocker.patch("repository.repository.DBSCAN", side_effect=FakeDBSCAN)
-
-    # pairwise_distances: tudo zero -> medoid vira o primeiro item do cluster
-    mocker.patch("repository.repository.pairwise_distances", side_effect=lambda cluster: np.zeros((len(cluster), len(cluster))))
-
-    enc, names = repository.calculate_know_face_video_encodings(save_cache=False)
-
-    # um medoid por cluster: e0 (cluster 0) e e2 (cluster 1)
-    assert len(enc) == 2
-    assert names == ["Anderson", "Anderson"]
-    assert np.allclose(enc[0], e0)
-    assert np.allclose(enc[1], e2)
+    e = np.array(encs[0])
+    assert np.isclose(np.linalg.norm(e), 1.0)
+    expected = 0.5 / np.sqrt(32)
+    assert np.isclose(e[0], expected)
